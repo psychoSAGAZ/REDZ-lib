@@ -1093,7 +1093,7 @@ local GetFlag, SetFlag, CheckFlag do
 end
 
 local ScreenGui = Create("ScreenGui", CoreGui, {
-	Name = "SAGAZx HUB ",
+	Name = "SAGAZx HUB CATÁLOGO",
 }, {
 	Create("UIScale", {
 		Scale = UIScale,
