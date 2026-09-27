@@ -32,9 +32,9 @@ local MyLibrary = {
 			["Color Theme"] = Color3.fromRGB(255, 0, 0),
 			["Color Text"] = Color3.fromRGB(238, 255, 63),
 			["Color Dark Text"] = Color3.fromRGB(0, 255, 109),
-			["Image Hub"]      = "rbxassetid://86050226751861",
-            ["Image Minimize"] = "rbxassetid://86050226751861",
-            ["Image Topbar"]   = "rbxassetid://86050226751861"
+			["Image Hub"]      = "rbxassetid://0",
+            ["Image Minimize"] = "rbxassetid://0",
+            ["Image Topbar"]   = "rbxassetid://0"
 		}
 },
     Info = {
