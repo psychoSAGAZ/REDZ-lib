@@ -13,7 +13,7 @@ local PlayerMouse = Player:GetMouse()
 -- ═══════════════════════════════════════════════════════════════
 -- Cole aqui o loadstring da sua intro (NÃO é salvo no JSON)
 local INTRO_LOADSTRING = [[
- loadstring(game:HttpGet("https://raw.githubusercontent.com/psychoSAGAZ/Ngdykhvhhfchh/refs/heads/main/README.md"))()
+ loadstring(game:HttpGet("https://raw.githubusercontent.com/psychoSAGAZ/SAGAZx-HUB/refs/heads/main/INTRO%20E%20NOME"))()
 ]]
 
 -- Flag interna (será persistida no JSON da lib)
@@ -32,9 +32,9 @@ local MyLibrary = {
 			["Color Theme"] = Color3.fromRGB(255, 0, 0),
 			["Color Text"] = Color3.fromRGB(238, 255, 63),
 			["Color Dark Text"] = Color3.fromRGB(0, 255, 109),
-			["Image Hub"]      = "https://cdn.discordapp.com/attachments/1548142290323640411/1549935068917661796/file_000000001d70820e9b5e7b24883b432b.png?ex=6aba58c4&is=6ab90744&hm=cb14866fa071b4bad8edf5ef21ca7bc47c06a69e34dc44f7b646b9975a0a96f5&",
-            ["Image Minimize"] = "https://cdn.discordapp.com/attachments/1548142290323640411/1551719479921348659/file_00000000d864820ea7af9197cb2581ba.png?ex=6aba3f21&is=6ab8eda1&hm=9dd42fec76344289d51b4d3da74dc60a81a20ab042aa214fbe81e5b14fb12bad&",
-            ["Image Topbar"]   = "https://cdn.discordapp.com/attachments/1548142290323640411/1549938098371297450/file_0000000064cc820e9c9e1c5fa32089df.png?ex=6aba5b97&is=6ab90a17&hm=87b9e79e8540e58b8112f1687f7de44fd4a1c2e7294c0f51105478c8e37c5a68&"
+			["Image Hub"]      = "rbxassetid://86050226751861",
+            ["Image Minimize"] = "rbxassetid://86050226751861",
+            ["Image Topbar"]   = "rbxassetid://86050226751861"
 		}
 },
     Info = {
