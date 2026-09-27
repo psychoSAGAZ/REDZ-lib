@@ -736,30 +736,26 @@ local function ResolveImageValue(key, rawValue)
         return nil, nil
     end
 
-    -- Já é rbxassetid ou rbxasset
     if rawValue:find("rbxassetid://") or rawValue:find("rbxasset://") then
         return rawValue, rawValue
     end
 
-    -- É só número → converte pra rbxassetid
     if tonumber(rawValue) then
         local id = "rbxassetid://" .. rawValue
         return id, id
     end
 
-    -- É link HTTP → baixa
     if IsHttpLink(rawValue) then
         local path = DownloadImage(key, rawValue)
         if path then
-            -- Formato getcustomasset (executor) ou file://
-            local asset = path
-            if getcustomasset and isfile and isfile(path) then
+            if getcustomasset then
                 local ok, custom = pcall(getcustomasset, path)
                 if ok and custom then
-                    asset = custom
+                    return custom, path
                 end
             end
-            return asset, path -- retorna o asset pronto + caminho local salvo
+            -- Sem getcustomasset, não renderiza arquivo local
+            return nil, path
         end
         return nil, nil
     end
@@ -1066,28 +1062,27 @@ function MyLibrary:SetTheme(NewTheme)
                 Val.Instance[GetColor(Val.Instance)] = Theme["Color Text"]
             elseif Val.Type == "DarkText" then
                 Val.Instance[GetColor(Val.Instance)] = Theme["Color Dark Text"]
-            elseif Val.Type == "ScrollBar" then
-                Val.Instance[GetColor(Val.Instance)] = Theme["Color Theme"]
+elseif Val.Type == "ScrollBar" then
+    Val.Instance[GetColor(Val.Instance)] = Theme["Color Theme"]
 
 elseif Val.Type == "Image" then
     local imgKey = Val.Instance:GetAttribute("ThemeImageKey")
-    if imgKey and currentTheme[imgKey] ~= nil then
-        -- Se for link http, baixa e salva no JSON de imagens
-        if IsHttpLink(currentTheme[imgKey]) then
-            local asset, localPath = ResolveImageValue(imgKey, currentTheme[imgKey])
+    if imgKey and Theme[imgKey] ~= nil then
+        if IsHttpLink(Theme[imgKey]) then
+            local asset, localPath = ResolveImageValue(imgKey, Theme[imgKey])
             if asset then
                 Val.Instance.Image = asset
-                ImagesConfig[imgKey] = localPath -- salva o caminho no JSON
+                ImagesConfig[imgKey] = localPath
                 SaveImagesConfig()
             end
         else
-            ApplyThemeImage(Val.Instance, currentTheme[imgKey], imgKey)
-            ImagesConfig[imgKey] = currentTheme[imgKey]
+            ApplyThemeImage(Val.Instance, Theme[imgKey], imgKey)
+            ImagesConfig[imgKey] = Theme[imgKey]
             SaveImagesConfig()
         end
     end
 end
-            end
+end
         end)
         if not ok then
             warn("Erro ao atualizar tema para", Val.Instance:GetFullName(), err)
@@ -4450,15 +4445,17 @@ ConfigTab:AddDropdown({
 
 task.spawn(function()
     task.wait(0.1)
-    local theme = MyLibrary.Themes[MyLibrary.Save.Theme]
-    for _, Val in ipairs(MyLibrary.Instances) do
-        if Val.Type == "Image" then
-            local imgKey = Val.Instance:GetAttribute("ThemeImageKey")
-            if imgKey and theme[imgKey] then
-                ApplyThemeImage(Val.Instance, theme[imgKey])
+    pcall(function()
+        local theme = MyLibrary.Themes[MyLibrary.Save.Theme]
+        for _, Val in ipairs(MyLibrary.Instances) do
+            if Val.Type == "Image" then
+                local imgKey = Val.Instance:GetAttribute("ThemeImageKey")
+                if imgKey and theme and theme[imgKey] then
+                    ApplyThemeImage(Val.Instance, theme[imgKey])
+                end
             end
         end
-    end
+    end)
 end)
 
     function Window:Set(Val1, Val2)
@@ -6778,16 +6775,14 @@ end
 -- ==================== CARREGA IMAGENS SALVAS NO BOOT ====================
 task.defer(function()
     task.wait(0.5)
-    for key, localPath in pairs(ImagesConfig) do
-        if type(localPath) == "string" and localPath ~= "" then
-            -- Aplica na tabela de tema atual
-            local theme = MyLibrary.Themes[MyLibrary.Save.Theme]
-            if theme then
-                if localPath:find("rbxassetid://") or localPath:find("rbxasset://") then
-                    theme[key] = localPath
-                else
-                    -- Caminho local → tenta getcustomasset
-                    if getcustomasset and isfile and isfile(localPath) then
+    pcall(function()
+        for key, localPath in pairs(ImagesConfig) do
+            if type(localPath) == "string" and localPath ~= "" then
+                local theme = MyLibrary.Themes[MyLibrary.Save.Theme]
+                if theme then
+                    if localPath:find("rbxassetid://") or localPath:find("rbxasset://") then
+                        theme[key] = localPath
+                    elseif getcustomasset and isfile and isfile(localPath) then
                         local ok, custom = pcall(getcustomasset, localPath)
                         if ok and custom then
                             theme[key] = custom
@@ -6796,9 +6791,8 @@ task.defer(function()
                 end
             end
         end
-    end
-    -- Reaplica no tema (dispara o loop de Instances)
-    MyLibrary:SetTheme(MyLibrary.Save.Theme)
+        MyLibrary:SetTheme(MyLibrary.Save.Theme)
+    end)
 end)
 
 return MyLibrary
