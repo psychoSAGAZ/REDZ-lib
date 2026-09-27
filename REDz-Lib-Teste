@@ -1055,7 +1055,7 @@ function MyLibrary:SetMinimizeStrokeColor(colorInput)
     SaveJson("SAGAZx HUB lib.json", MyLibrary.Save)
 
     -- Atualiza o stroke do botÃ£o de minimizar
-    local minimizeBtn = MyLibrary.MinimizeExternalButton
+    local minimizeBtn = MyLibrary.MinimizeExternalButton = MinimizeExternalButton
     if minimizeBtn then
         local stroke = minimizeBtn:FindFirstChild("LibMinimizeBorder")
         if stroke then
@@ -1676,7 +1676,7 @@ end)
 function Window:Minimize()
     MainFrame.Visible = not MainFrame.Visible
     -- Atualiza a borda do botÃ£o de minimizar conforme a visibilidade do Hub
-    local minimizeBtn = MyLibrary.MinimizeExternalButton
+    local minimizeBtn = MyLibrary.MinimizeExternalButton = MinimizeExternalButton
     if minimizeBtn then
         local stroke = minimizeBtn:FindFirstChild("LibMinimizeBorder")
         if stroke then
@@ -1704,7 +1704,7 @@ MinimizeExternalButton:SetAttribute("ThemeImageKey", "Image Minimize")  -- 🔑
 Make("Corner", MinimizeExternalButton, UDim.new(0, 8))
 ApplyMinimizeBorder(MinimizeExternalButton)
 MinimizeExternalButton.Activated:Connect(Window.Minimize)
-MyLibrary.MinimizeExternalButton
+MyLibrary.MinimizeExternalButton = MinimizeExternalButton
 
 -- ═══════════════════════════════════════════════════════
 -- CLAMP: mantém o botão sempre dentro da tela
@@ -3645,9 +3645,9 @@ local function SaveTheme(themeName)
         MinimizeStrokeColor = MyLibrary:GetMinimizeStrokeColor(),
         StrokeTransparency = MyLibrary:GetStrokeTransparency(),
         
-        HubImage = MyLibrary:GetHubImage(),
-        MinimizeImage = MyLibrary:GetMinimizeImage(),
-        TopbarImage = MyLibrary:GetTopbarImage(),
+ImageHub = MyLibrary:GetThemeColor("Image Hub") or "",
+ImageMinimize = MyLibrary:GetThemeColor("Image Minimize") or "",
+ImageTopbar = MyLibrary:GetThemeColor("Image Topbar") or "",
         
         GlobalTransparency = MyLibrary:GetGlobalTransparency(),
         HubTransparency = MyLibrary:GetHubTransparency(),
@@ -3708,10 +3708,10 @@ local function LoadTheme(themeName)
     if themeData.MinimizeStrokeColor then MyLibrary:SetMinimizeStrokeColor(themeData.MinimizeStrokeColor) end
     if themeData.StrokeTransparency then MyLibrary:SetStrokeTransparency(themeData.StrokeTransparency) end
     
-    if themeData.HubImage and themeData.HubImage ~= "" then MyLibrary:SetHubImage(themeData.HubImage) end
-    if themeData.MinimizeImage and themeData.MinimizeImage ~= "" then MyLibrary:SetMinimizeImage(themeData.MinimizeImage) end
-    if themeData.TopbarImage and themeData.TopbarImage ~= "" then MyLibrary:SetTopbarImage(themeData.TopbarImage) end
-    
+if themeData.ImageHub then MyLibrary:SetThemeColor("Image Hub", themeData.ImageHub) end
+if themeData.ImageMinimize then MyLibrary:SetThemeColor("Image Minimize", themeData.ImageMinimize) end
+if themeData.ImageTopbar then MyLibrary:SetThemeColor("Image Topbar", themeData.ImageTopbar) end
+
     if themeData.GlobalTransparency then MyLibrary:SetGlobalTransparency(themeData.GlobalTransparency) end
     if themeData.HubTransparency then MyLibrary:SetHubTransparency(themeData.HubTransparency) end
     if themeData.HubImageTransparency then MyLibrary:SetHubImageTransparency(themeData.HubImageTransparency) end
@@ -6455,19 +6455,15 @@ function Tab:AddDiscordInvite(Configs)
 local ImageLabel = Create("ImageLabel", FrameHolder, {
     Size = UDim2.new(1, 0, 0, 85),
     Position = UDim2.new(0, 0, 0, 0),
-    Image = "",  -- ✅ vazio, será preenchido pelo ProcessAndApplyImage
+    Image = "",
     BackgroundTransparency = 1,
     ScaleType = Enum.ScaleType.Crop
 })
 Make("Corner", ImageLabel, UDim.new(0, 6))
 
--- ⚠️ Aplica a imagem aceitando ID OU link HTTP
+-- ✅ Aplica direto (aceita ID ou rbxassetid://)
 if Logo and Logo ~= "" then
-    task.spawn(function()
-        -- nome único por AddDiscordInvite (usa contador pra não colidir se tiver vários)
-        local uniqueId = "DiscordInvite_" .. tostring(math.random(100000, 999999))
-        ProcessAndApplyImage(ImageLabel, Logo, uniqueId)
-    end)
+    ApplyThemeImage(ImageLabel, Logo)
 end
 
         -- Barra horizontal na parte inferior usando Color Hub 2
@@ -6616,5 +6612,3 @@ end
 end
 
 return MyLibrary
-
-
