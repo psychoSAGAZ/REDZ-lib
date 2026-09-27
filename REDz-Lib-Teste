@@ -81,6 +81,55 @@ pcall(function()
     end
 end)
 
+-- ==================== SISTEMA DE IMAGENS ====================
+local ImagesFolder = LibFolder .. "/Imagens"
+local ImagesConfigPath = LibFolder .. "/Imagens.json"
+
+pcall(function()
+    if makefolder and not isfolder(ImagesFolder) then
+        makefolder(ImagesFolder)
+    end
+end)
+
+-- Tabela que guarda os caminhos/IDs das imagens
+local ImagesConfig = {
+    ["Image Hub"]      = nil, -- caminho local OU rbxassetid://
+    ["Image Topbar"]   = nil,
+    ["Image Minimize"] = nil
+}
+
+-- Mapeia chave do tema -> nome do arquivo local
+local ImageFileNames = {
+    ["Image Hub"]      = "ImageHub",
+    ["Image Topbar"]   = "ImageTopbar",
+    ["Image Minimize"] = "ImageMinimize"
+}
+
+-- Carrega o JSON de imagens
+local function LoadImagesConfig()
+    if not (readfile and isfile) then return end
+    local ok, decoded = pcall(function()
+        if isfile(ImagesConfigPath) then
+            return HttpService:JSONDecode(readfile(ImagesConfigPath))
+        end
+    end)
+    if ok and type(decoded) == "table" then
+        for k, v in pairs(decoded) do
+            ImagesConfig[k] = v
+        end
+    end
+end
+
+-- Salva o JSON de imagens
+local function SaveImagesConfig()
+    if not writefile then return end
+    pcall(function()
+        writefile(ImagesConfigPath, HttpService:JSONEncode(ImagesConfig))
+    end)
+end
+
+LoadImagesConfig()
+
 local function GetFullPath(fileName)
     if type(fileName) ~= "string" then
         return fileName
@@ -618,11 +667,108 @@ local function SaveJson(FileName, save)
     end
 end
 
--- ==================== IMAGENS DO TEMA ====================
--- Aplica um valor de imagem (ID, rbxassetid:// ou link) diretamente.
--- Links HTTP são aplicados como estão (Roblox não renderiza por padrão,
--- mas mantém compatibilidade pra quem usa executor com hook de http).
-local function ApplyThemeImage(imageObject, imageValue)
+-- Detecta se é link HTTP/HTTPS
+local function IsHttpLink(str)
+    return type(str) == "string" and (str:match("^https?://") ~= nil)
+end
+
+-- Detecta extensão da URL (png, jpg, jpeg, webp)
+local function GetImageExtension(url)
+    local ext = url:match("%.([%a%d]+)$")
+    if ext then
+        ext = ext:lower()
+        if ext == "jpg" or ext == "jpeg" or ext == "png" or ext == "webp" then
+            return ext
+        end
+    end
+    return "png"
+end
+
+-- Baixa a imagem para a pasta Imagens e retorna o caminho local
+local function DownloadImage(key, url)
+    local fileName = ImageFileNames[key]
+    if not fileName then return nil end
+
+    local ext = GetImageExtension(url)
+    local filePath = ImagesFolder .. "/" .. fileName .. "." .. ext
+
+    -- Se já existe, remove para sobrescrever
+    pcall(function()
+        if isfile and isfile(filePath) then
+            delfile(filePath)
+        end
+    end)
+
+    -- Detecta o método de download disponível (varia por executor)
+    local success, data = pcall(function()
+        if syn and syn.request then
+            local res = syn.request({ Url = url, Method = "GET" })
+            return res and res.Body
+        elseif http and http.request then
+            local res = http.request({ Url = url, Method = "GET" })
+            return res and res.Body
+        elseif request then
+            local res = request({ Url = url, Method = "GET" })
+            return res and res.Body
+        elseif game and HttpGet then
+            return game:HttpGet(url)
+        end
+    end)
+
+    if not success or not data then
+        warn("[SAGAZx] Falha ao baixar imagem:", url)
+        return nil
+    end
+
+    local writeOk = pcall(function()
+        writefile(filePath, data)
+    end)
+
+    if writeOk then
+        return filePath
+    end
+    return nil
+end
+
+-- Processa uma imagem: se for ID, mantém; se for link, baixa e salva local
+local function ResolveImageValue(key, rawValue)
+    if type(rawValue) ~= "string" or rawValue == "" then
+        return nil, nil
+    end
+
+    -- Já é rbxassetid ou rbxasset
+    if rawValue:find("rbxassetid://") or rawValue:find("rbxasset://") then
+        return rawValue, rawValue
+    end
+
+    -- É só número → converte pra rbxassetid
+    if tonumber(rawValue) then
+        local id = "rbxassetid://" .. rawValue
+        return id, id
+    end
+
+    -- É link HTTP → baixa
+    if IsHttpLink(rawValue) then
+        local path = DownloadImage(key, rawValue)
+        if path then
+            -- Formato getcustomasset (executor) ou file://
+            local asset = path
+            if getcustomasset and isfile and isfile(path) then
+                local ok, custom = pcall(getcustomasset, path)
+                if ok and custom then
+                    asset = custom
+                end
+            end
+            return asset, path -- retorna o asset pronto + caminho local salvo
+        end
+        return nil, nil
+    end
+
+    return nil, nil
+end
+
+-- Aplica a imagem resolvendo o valor bruto
+local function ApplyThemeImage(imageObject, imageValue, key)
     if not imageObject or not (imageObject:IsA("ImageLabel") or imageObject:IsA("ImageButton")) then
         return
     end
@@ -632,12 +778,19 @@ local function ApplyThemeImage(imageObject, imageValue)
         return
     end
 
+    -- Se foi passada a key, usa ResolveImageValue para baixar se necessário
+    if key then
+        local asset = ResolveImageValue(key, imageValue)
+        imageObject.Image = asset or ""
+        return
+    end
+
+    -- Fallback antigo (compatibilidade)
     if imageValue:find("rbxassetid://") or imageValue:find("rbxasset://") then
         imageObject.Image = imageValue
     elseif tonumber(imageValue) then
         imageObject.Image = "rbxassetid://" .. imageValue
     else
-        -- link http/https — aplica direto
         imageObject.Image = imageValue
     end
 end
@@ -916,13 +1069,24 @@ function MyLibrary:SetTheme(NewTheme)
             elseif Val.Type == "ScrollBar" then
                 Val.Instance[GetColor(Val.Instance)] = Theme["Color Theme"]
 
-            -- ✅ COLA AQUI ⬇️ (antes do "end" que fecha o if/elseif)
-            elseif Val.Type == "Image" then
-                local imgKey = Val.Instance:GetAttribute("ThemeImageKey")
-                if imgKey and Theme[imgKey] ~= nil then
-                    ApplyThemeImage(Val.Instance, Theme[imgKey])
-                end
-            -- ✅ FIM DA COLA ⬆️
+elseif Val.Type == "Image" then
+    local imgKey = Val.Instance:GetAttribute("ThemeImageKey")
+    if imgKey and currentTheme[imgKey] ~= nil then
+        -- Se for link http, baixa e salva no JSON de imagens
+        if IsHttpLink(currentTheme[imgKey]) then
+            local asset, localPath = ResolveImageValue(imgKey, currentTheme[imgKey])
+            if asset then
+                Val.Instance.Image = asset
+                ImagesConfig[imgKey] = localPath -- salva o caminho no JSON
+                SaveImagesConfig()
+            end
+        else
+            ApplyThemeImage(Val.Instance, currentTheme[imgKey], imgKey)
+            ImagesConfig[imgKey] = currentTheme[imgKey]
+            SaveImagesConfig()
+        end
+    end
+end
             end
         end)
         if not ok then
@@ -6610,5 +6774,31 @@ end
 
     return Window
 end
+
+-- ==================== CARREGA IMAGENS SALVAS NO BOOT ====================
+task.defer(function()
+    task.wait(0.5)
+    for key, localPath in pairs(ImagesConfig) do
+        if type(localPath) == "string" and localPath ~= "" then
+            -- Aplica na tabela de tema atual
+            local theme = MyLibrary.Themes[MyLibrary.Save.Theme]
+            if theme then
+                if localPath:find("rbxassetid://") or localPath:find("rbxasset://") then
+                    theme[key] = localPath
+                else
+                    -- Caminho local → tenta getcustomasset
+                    if getcustomasset and isfile and isfile(localPath) then
+                        local ok, custom = pcall(getcustomasset, localPath)
+                        if ok and custom then
+                            theme[key] = custom
+                        end
+                    end
+                end
+            end
+        end
+    end
+    -- Reaplica no tema (dispara o loop de Instances)
+    MyLibrary:SetTheme(MyLibrary.Save.Theme)
+end)
 
 return MyLibrary
