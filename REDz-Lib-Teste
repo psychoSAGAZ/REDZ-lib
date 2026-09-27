@@ -8,6 +8,17 @@ local Players = game:GetService("Players")
 local Player = Players.LocalPlayer
 local PlayerMouse = Player:GetMouse()
 
+-- ═══════════════════════════════════════════════════════════════
+-- 🎬 CONFIGURAÇÃO DA INTRO (LOADSTRING)
+-- ═══════════════════════════════════════════════════════════════
+-- Cole aqui o loadstring da sua intro (NÃO é salvo no JSON)
+local INTRO_LOADSTRING = [[
+ loadstring(game:HttpGet("https://raw.githubusercontent.com/psychoSAGAZ/Ngdykhvhhfchh/refs/heads/main/README.md"))()
+]]
+
+-- Flag interna (será persistida no JSON da lib)
+local INTRO_ENABLED = true
+
 local MyLibrary = {
     Themes = {
 		Customize = {
@@ -172,6 +183,46 @@ end
 end
 
 pcall(Save, "SAGAZx HUB lib.json")
+
+-- ═══════════════════════════════════════════════════════════════
+-- 🎬 CARREGAMENTO DA PREFERÊNCIA DA INTRO
+-- ═══════════════════════════════════════════════════════════════
+pcall(function()
+    local path = GetFullPath("SAGAZx HUB lib.json")
+    if isfile and isfile(path) then
+        local data = HttpService:JSONDecode(readfile(path))
+        if type(data) == "table" and data.IntroEnabled ~= nil then
+            INTRO_ENABLED = data.IntroEnabled == true
+        end
+    end
+end)
+
+-- ═══════════════════════════════════════════════════════════════
+-- 🎬 EXECUÇÃO DA INTRO (0.5s ANTES DA LIB)
+-- ═══════════════════════════════════════════════════════════════
+local function PlayIntro()
+    if not INTRO_ENABLED then return end
+    if type(INTRO_LOADSTRING) ~= "string" or INTRO_LOADSTRING:gsub("%s", "") == "" then
+        return
+    end
+    
+    -- Roda em paralelo pra não travar a lib (a intro é assíncrona)
+    task.spawn(function()
+        local ok, err = pcall(function()
+            local fn = loadstring(INTRO_LOADSTRING)
+            if fn then fn() end
+        end)
+        if not ok then
+            warn("[SAGAZx HUB] Erro ao rodar intro:", err)
+        end
+    end)
+end
+
+-- ⏱️ Roda a intro 0.5s antes da lib aparecer
+if INTRO_ENABLED then
+    PlayIntro()
+    task.wait(0.5)
+end
 
 MyLibrary.StrokeInstances = {}
 
@@ -664,7 +715,7 @@ local function Make(Ele, Instance, props, ...)
 end
 
 AddEle("Corner", function(parent, CornerRadius)
-    -- Removida referÃªncia Ã  variÃ¡vel `props` que nÃ£o existia
+    -- Removida referÃªncia Ã  variÃ¡vel `props` que nÃ£o existia
     local New = SetProps(Create("UICorner", parent, {
         CornerRadius = CornerRadius or UDim.new(0, 7)
     }), nil)
@@ -1055,8 +1106,8 @@ function MyLibrary:SetMinimizeStrokeColor(colorInput)
     SaveJson("SAGAZx HUB lib.json", MyLibrary.Save)
 
     -- Atualiza o stroke do botÃ£o de minimizar
-    local minimizeBtn = MyLibrary.MinimizeExternalButton = MinimizeExternalButton
-    if minimizeBtn then
+    local minimizeBtn = MyLibrary.MinimizeExternalButton
+if minimizeBtn then
         local stroke = minimizeBtn:FindFirstChild("LibMinimizeBorder")
         if stroke then
             UpdateMinimizeStroke(stroke)
@@ -1676,7 +1727,7 @@ end)
 function Window:Minimize()
     MainFrame.Visible = not MainFrame.Visible
     -- Atualiza a borda do botÃ£o de minimizar conforme a visibilidade do Hub
-    local minimizeBtn = MyLibrary.MinimizeExternalButton = MinimizeExternalButton
+    local minimizeBtn = MyLibrary.MinimizeExternalButton
     if minimizeBtn then
         local stroke = minimizeBtn:FindFirstChild("LibMinimizeBorder")
         if stroke then
@@ -4248,6 +4299,79 @@ ExtrasTab:AddButton({
 
 
 -- ==================== ABA DE CONFIGURAÇÕES ====================
+-- ═══════════════════════════════════════════════════════════════
+-- 🎬 SEÇÃO: INTRO DO SCRIPT
+-- ═══════════════════════════════════════════════════════════════
+ConfigTab:AddSection({"Intro do Script"})
+
+-- 🔘 Toggle: Ativa/Desativa a intro (persistido no JSON)
+local IntroToggle
+IntroToggle = ConfigTab:AddToggle({
+    Name = "Intro Ativada",
+    Desc = "Ativa ou desativa a intro ao iniciar o script",
+    Default = INTRO_ENABLED,
+    Callback = function(state)
+        INTRO_ENABLED = state
+        
+        -- Persiste apenas o estado (não o loadstring)
+        local path = GetFullPath("SAGAZx HUB lib.json")
+        local data = {}
+        
+        if isfile and isfile(path) then
+            local ok, decoded = pcall(function()
+                return HttpService:JSONDecode(readfile(path))
+            end)
+            if ok and type(decoded) == "table" then
+                data = decoded
+            end
+        end
+        
+        data.IntroEnabled = INTRO_ENABLED
+        pcall(function()
+            writefile(path, HttpService:JSONEncode(data))
+        end)
+    end
+})
+
+-- ▶️ Botão: Testar a intro manualmente (não altera o estado salvo)
+ConfigTab:AddButton({
+    Name = "▶ Testar Intro",
+    Desc = "Executa a intro imediatamente para pré-visualizar",
+    Callback = function()
+        if type(INTRO_LOADSTRING) ~= "string" or INTRO_LOADSTRING:gsub("%s", "") == "" then
+            -- Se a lib tiver sistema de notificação
+            if MyLibrary.Notify then
+                MyLibrary:Notify({
+                    Title = "Intro",
+                    Message = "Nenhum loadstring foi configurado!",
+                    Duration = 3
+                })
+            else
+                warn("[SAGAZx HUB] Nenhum loadstring de intro configurado.")
+            end
+            return
+        end
+        
+        -- Roda independente do toggle (é só teste)
+        task.spawn(function()
+            local ok, err = pcall(function()
+                local fn = loadstring(INTRO_LOADSTRING)
+                if fn then fn() end
+            end)
+            if not ok then
+                warn("[SAGAZx HUB] Erro no teste da intro:", err)
+            else
+                if MyLibrary.Notify then
+                    MyLibrary:Notify({
+                        Title = "Intro",
+                        Message = "Teste executado com sucesso!",
+                        Duration = 3
+                    })
+                end
+            end
+        end)
+    end
+})
 
 local ToggleKeyInput = ConfigTab:AddKeybind({
     Name = "Tecla do Hub",
