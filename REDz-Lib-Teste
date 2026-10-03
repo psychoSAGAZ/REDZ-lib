@@ -628,102 +628,143 @@ end)
 local requestFunc = request or http_request or (syn and syn.request)
 local getAssetFunc = getcustomasset or getsynasset
 
-local function LoadImageSettings()
-    local defaultData = {
-    HubImage = DEFAULT_HUB_IMAGE,
-    MinimizeImage = DEFAULT_MINIMIZE_IMAGE,
-    TopbarImage = DEFAULT_TOP_BAR_IMAGE
+-- ═══════════════════════════════════════════════════════════
+-- NOMES FIXOS DOS ARQUIVOS DE IMAGEM
+-- Cada tipo salva SEMPRE no mesmo arquivo (sobrescreve)
+-- ═══════════════════════════════════════════════════════════
+local IMAGE_FILES = {
+    Hub      = IMAGES_FOLDER .. "/ImageHub.png",
+    Topbar   = IMAGES_FOLDER .. "/ImageTopbar.png",
+    Minimize = IMAGES_FOLDER .. "/ImageMinimize.png",
 }
-    if isfile and isfile(JSON_FILE_PATH) then
-        local ok, decoded = pcall(function()
-            return HttpService:JSONDecode(readfile(JSON_FILE_PATH))
-        end)
-        if ok and type(decoded) == "table" then
-            return decoded
-        end
-    else
-        SaveJson(JSON_FILE_PATH, defaultData) -- usa a funÃ§Ã£o existente
-    end
-    return defaultData
-end
 
-local function SaveImageSettings(data)
-    SaveJson(JSON_FILE_PATH, data)
-end
+-- Guarda o último link usado para cada imagem (só pra detectar mudanças)
+local LastImageLinks = {
+    Hub      = nil,
+    Topbar   = nil,
+    Minimize = nil,
+}
 
--- Guarda o último link usado para cada imagem
-local LastImageLinks = {}
-
-local LastImageLinks = {}
-
-local function ProcessAndApplyImage(objectTarget, imageInput, namePrefix)
-    if not objectTarget or type(imageInput) ~= "string" or imageInput == "" then
-        if objectTarget and (objectTarget:IsA("ImageLabel") or objectTarget:IsA("ImageButton")) then
-            objectTarget.Image = ""
-        end
+-- ═══════════════════════════════════════════════════════════
+-- ProcessAndApplyImage (reescrito com nome FIXO)
+-- kind = "Hub" | "Topbar" | "Minimize"
+-- ═══════════════════════════════════════════════════════════
+local function ProcessAndApplyImage(objectTarget, imageInput, kind)
+    if not objectTarget then return "" end
+    if type(kind) ~= "string" or not IMAGE_FILES[kind] then
+        warn("[Images] kind inválido:", tostring(kind))
         return ""
     end
 
+    -- Se não é uma ImageLabel/ImageButton, ignora silenciosamente
+    local isImage = objectTarget:IsA("ImageLabel") or objectTarget:IsA("ImageButton")
+
+    -- Sem imagem
+    if type(imageInput) ~= "string" or imageInput == "" then
+        if isImage then objectTarget.Image = "" end
+        return ""
+    end
+
+    -- ═══════════ Caso 1: Link HTTP ═══════════
     if imageInput:find("https://") or imageInput:find("http://") then
         if not requestFunc or not getAssetFunc then
-            warn("Executor não suporta request/getcustomasset.")
+            warn("[Images] Executor não suporta request/getcustomasset.")
             return imageInput
         end
 
-        -- ⚠️ USA NOME ÚNICO POR LINK (hash) para contornar cache do executor
-        local linkHash = 0
-        for i = 1, #imageInput do
-            linkHash = (linkHash * 31 + string.byte(imageInput, i)) % 2147483647
-        end
-        local fileName = IMAGES_FOLDER .. "/" .. namePrefix .. "_" .. tostring(linkHash) .. ".png"
+        local fileName = IMAGE_FILES[kind]
 
-        -- 1. Se o arquivo já existe, usa direto
-        if isfile and isfile(fileName) then
+        -- Se é o MESMO link da última vez, aplica direto do arquivo em cache
+        if LastImageLinks[kind] == imageInput and isfile and isfile(fileName) then
             local assetPath = getAssetFunc(fileName)
-            if objectTarget:IsA("ImageLabel") or objectTarget:IsA("ImageButton") then
-                objectTarget.Image = assetPath
-            end
-            LastImageLinks[namePrefix] = imageInput
+            if isImage then objectTarget.Image = assetPath end
             return assetPath
         end
 
-        -- 2. Limpa referência visual e baixa novo
-        if objectTarget:IsA("ImageLabel") or objectTarget:IsA("ImageButton") then
-            objectTarget.Image = ""
+        -- ⚠️ Se o arquivo já existe mas o link é diferente, deleta pra forçar sobrescrita limpa
+        if isfile and isfile(fileName) then
+            pcall(delfile, fileName)
         end
 
-        local response = requestFunc({
+        -- Limpa visualmente enquanto baixa
+        if isImage then objectTarget.Image = "" end
+
+        local ok, response = pcall(requestFunc, {
             Url = imageInput,
             Method = "GET",
             Headers = {["User-Agent"] = "Mozilla/5.0"}
         })
 
-        if response and response.Body then
-            writefile(fileName, response.Body)
-            LastImageLinks[namePrefix] = imageInput
+        if ok and response and response.Body then
+            local okWrite = pcall(writefile, fileName, response.Body)
+            if not okWrite then
+                warn("[Images] Falha ao salvar arquivo: " .. fileName)
+                return imageInput
+            end
+
+            LastImageLinks[kind] = imageInput
 
             local assetPath = getAssetFunc(fileName)
-            if objectTarget:IsA("ImageLabel") or objectTarget:IsA("ImageButton") then
+            if isImage then
                 objectTarget.Image = ""
-                task.wait()
+                task.wait()  -- dá 1 frame pro executor registrar o asset
                 objectTarget.Image = assetPath
             end
             return assetPath
         else
-            warn("Falha ao baixar imagem: " .. tostring(imageInput))
+            warn("[Images] Falha ao baixar imagem: " .. tostring(imageInput))
             return imageInput
         end
-    else
-        local formattedId = imageInput
-        if not imageInput:find("rbxassetid://") and not imageInput:find("rbxasset://") then
-            formattedId = "rbxassetid://" .. imageInput
-        end
-        LastImageLinks[namePrefix] = imageInput
-        if objectTarget:IsA("ImageLabel") or objectTarget:IsA("ImageButton") then
-            objectTarget.Image = formattedId
-        end
-        return formattedId
     end
+
+    -- ═══════════ Caso 2: rbxassetid:// ou ID puro ═══════════
+    local formattedId = imageInput
+    if not imageInput:find("rbxassetid://") and not imageInput:find("rbxasset://") then
+        formattedId = "rbxassetid://" .. imageInput
+    end
+
+    -- Para assets do Roblox não salvamos arquivo, apenas memorizamos
+    LastImageLinks[kind] = imageInput
+    if isImage then objectTarget.Image = formattedId end
+    return formattedId
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- JSON que guarda apenas o LINK atual (não os arquivos em si)
+-- ═══════════════════════════════════════════════════════════
+local JSON_FILE_PATH = IMAGES_FOLDER .. "/imagens.json"
+
+local function GetDefaultThemeImages()
+    local theme = MyLibrary.Themes[MyLibrary.Save.Theme] or {}
+    return {
+        HubImage      = theme["HubImage"]      or "",
+        MinimizeImage = theme["MinimizeImage"] or "",
+        TopbarImage   = theme["TopbarImage"]   or "",
+    }
+end
+
+local function LoadImageSettings()
+    local defaults = GetDefaultThemeImages()
+
+    if isfile and isfile(JSON_FILE_PATH) then
+        local ok, decoded = pcall(function()
+            return HttpService:JSONDecode(readfile(JSON_FILE_PATH))
+        end)
+        if ok and type(decoded) == "table" then
+            -- Garante que todas as chaves existam
+            defaults.HubImage      = decoded.HubImage      or defaults.HubImage
+            defaults.MinimizeImage = decoded.MinimizeImage or defaults.MinimizeImage
+            defaults.TopbarImage   = decoded.TopbarImage   or defaults.TopbarImage
+            return defaults
+        end
+    else
+        SaveJson(JSON_FILE_PATH, defaults)
+    end
+    return defaults
+end
+
+local function SaveImageSettings(data)
+    SaveJson(JSON_FILE_PATH, data)
 end
 
 local CurrentImageSettings = LoadImageSettings()
@@ -1016,38 +1057,36 @@ function MyLibrary:SetTheme(NewTheme)
     -- ─────── Imagens do tema ───────
     -- Só aplica se o tema tiver a chave definida
     task.spawn(function()
-        local hubImg = GetThemeImage("HubImage")
-        local minImg = GetThemeImage("MinimizeImage")
-        local topImg = GetThemeImage("TopbarImage")
+    local hubImg = GetThemeImage("HubImage")
+    local minImg = GetThemeImage("MinimizeImage")
+    local topImg = GetThemeImage("TopbarImage")
 
-        -- Atualiza o JSON de imagens internas também
-        if hubImg and hubImg ~= "" then
-            CurrentImageSettings.HubImage = hubImg
-            if MyLibrary.HubImageLabel then
-                LastImageLinks["Hub"] = nil  -- força re-download se mudou
-                ProcessAndApplyImage(MyLibrary.HubImageLabel, hubImg, "Hub")
-            end
+    if hubImg and hubImg ~= "" then
+        CurrentImageSettings.HubImage = hubImg
+        if MyLibrary.HubImageLabel then
+            LastImageLinks["Hub"] = nil
+            ProcessAndApplyImage(MyLibrary.HubImageLabel, hubImg, "Hub")   -- ✅
         end
+    end
 
-        if minImg and minImg ~= "" then
-            CurrentImageSettings.MinimizeImage = minImg
-            if MyLibrary.MinimizeExternalButton then
-                LastImageLinks["minizebutton"] = nil
-                ProcessAndApplyImage(MyLibrary.MinimizeExternalButton, minImg, "minizebutton")
-            end
+    if minImg and minImg ~= "" then
+        CurrentImageSettings.MinimizeImage = minImg
+        if MyLibrary.MinimizeExternalButton then
+            LastImageLinks["Minimize"] = nil                               -- ✅ mudou
+            ProcessAndApplyImage(MyLibrary.MinimizeExternalButton, minImg, "Minimize")  -- ✅
         end
+    end
 
-        if topImg and topImg ~= "" then
-            CurrentImageSettings.TopbarImage = topImg
-            if MyLibrary.TopbarImageLabel then
-                LastImageLinks["ImageTopbar"] = nil
-                ProcessAndApplyImage(MyLibrary.TopbarImageLabel, topImg, "ImageTopbar")
-            end
+    if topImg and topImg ~= "" then
+        CurrentImageSettings.TopbarImage = topImg
+        if MyLibrary.TopbarImageLabel then
+            LastImageLinks["Topbar"] = nil                                 -- ✅ mudou
+            ProcessAndApplyImage(MyLibrary.TopbarImageLabel, topImg, "Topbar")  -- ✅
         end
+    end
 
-        SaveImageSettings(CurrentImageSettings)
-    end)
-end
+    SaveImageSettings(CurrentImageSettings)
+end)
 
 function MyLibrary:SetScale(NewScale)
     NewScale = ViewportSize.Y / math.clamp(NewScale, 300, 2000)
@@ -1115,14 +1154,6 @@ function MyLibrary:SetHubTransparency(value)
     end
 end
 
-function MyLibrary:SetTopbarImage(imageInput)
-    local imageLabel = MyLibrary.TopbarImageLabel
-    if not imageLabel then warn("TopbarImageLabel nï¿½o encontrado.") return end
-    local result = ProcessAndApplyImage(imageLabel, imageInput, "ImageTopbar")
-    -- Salve sempre, independente do resultado
-    CurrentImageSettings.TopbarImage = imageInput
-    SaveImageSettings(CurrentImageSettings)
-end
 
 function MyLibrary:ResetHubImage()
     local imageLabel = MyLibrary.HubImageLabel
@@ -1135,7 +1166,7 @@ function MyLibrary:ResetHubImage()
     end
 
     LastImageLinks["Hub"] = nil
-    ProcessAndApplyImage(imageLabel, themeImg, "Hub")
+    ProcessAndApplyImage(imageLabel, themeImg, "Hub")   -- ✅
     CurrentImageSettings.HubImage = themeImg
     SaveImageSettings(CurrentImageSettings)
 end
@@ -1150,8 +1181,8 @@ function MyLibrary:ResetMinimizeImage()
         return
     end
 
-    LastImageLinks["minizebutton"] = nil
-    ProcessAndApplyImage(minimizeBtn, themeImg, "minizebutton")
+    LastImageLinks["Minimize"] = nil                    -- ✅
+    ProcessAndApplyImage(minimizeBtn, themeImg, "Minimize")   -- ✅
     CurrentImageSettings.MinimizeImage = themeImg
     SaveImageSettings(CurrentImageSettings)
 end
@@ -1166,8 +1197,8 @@ function MyLibrary:ResetTopbarImage()
         return
     end
 
-    LastImageLinks["ImageTopbar"] = nil
-    ProcessAndApplyImage(imageLabel, themeImg, "ImageTopbar")
+    LastImageLinks["Topbar"] = nil                      -- ✅
+    ProcessAndApplyImage(imageLabel, themeImg, "Topbar")   -- ✅
     CurrentImageSettings.TopbarImage = themeImg
     SaveImageSettings(CurrentImageSettings)
 end
@@ -1186,32 +1217,33 @@ function MyLibrary:SetHubImageTransparency(value)
     end
 end
 
+function MyLibrary:SetTopbarImage(imageInput)
+    local imageLabel = MyLibrary.TopbarImageLabel
+    if not imageLabel then warn("TopbarImageLabel não encontrado.") return end
+    ProcessAndApplyImage(imageLabel, imageInput, "Topbar")   -- ✅
+    CurrentImageSettings.TopbarImage = imageInput
+    SaveImageSettings(CurrentImageSettings)
+end
+
 function MyLibrary:SetHubImage(imageInput)
     local imageLabel = MyLibrary.HubImageLabel
-    if not imageLabel then warn("HubImageLabel nÃ£o encontrado.") return end
-    local result = ProcessAndApplyImage(imageLabel, imageInput, "Hub")
+    if not imageLabel then warn("HubImageLabel não encontrado.") return end
+    local result = ProcessAndApplyImage(imageLabel, imageInput, "Hub")   -- ✅
     if result ~= "" then
         CurrentImageSettings.HubImage = imageInput
         SaveImageSettings(CurrentImageSettings)
     end
 end
 
-
-
 function MyLibrary:SetMinimizeImage(imageInput)
     local minimizeBtn = ScreenGui:FindFirstChild("MinimizeExternalButton")
-    if not minimizeBtn then
-        warn("MinimizeExternalButton nÃ£o encontrado.")
-        return
-    end
-    local result = ProcessAndApplyImage(minimizeBtn, imageInput, "minizebutton")
+    if not minimizeBtn then warn("MinimizeExternalButton não encontrado.") return end
+    local result = ProcessAndApplyImage(minimizeBtn, imageInput, "Minimize")   -- ✅
     if result ~= "" then
         CurrentImageSettings.MinimizeImage = imageInput
         SaveImageSettings(CurrentImageSettings)
     end
 end
-
-
 
 function MyLibrary:GetHubImage()
     return CurrentImageSettings.HubImage
@@ -4513,16 +4545,16 @@ task.spawn(function()
     local minImg = GetThemeImage("MinimizeImage")
     local topImg = GetThemeImage("TopbarImage")
 
-    -- Se o usuário já personalizou via setHubImage, mantém a escolha dele
     local savedHub = CurrentImageSettings.HubImage
     local savedMin = CurrentImageSettings.MinimizeImage
     local savedTop = CurrentImageSettings.TopbarImage
 
     -- Prioridade: JSON salvo → Imagem do tema
-    ProcessAndApplyImage(MyLibrary.HubImageLabel,       savedHub or hubImg, "Hub")
-    ProcessAndApplyImage(MyLibrary.MinimizeExternalButton, savedMin or minImg, "minizebutton")
-    ProcessAndApplyImage(MyLibrary.TopbarImageLabel,    savedTop or topImg, "ImageTopbar")
+    ProcessAndApplyImage(MyLibrary.HubImageLabel,           savedHub or hubImg, "Hub")       -- ✅
+    ProcessAndApplyImage(MyLibrary.MinimizeExternalButton,  savedMin or minImg, "Minimize")  -- ✅
+    ProcessAndApplyImage(MyLibrary.TopbarImageLabel,        savedTop or topImg, "Topbar")    -- ✅
 end)
+
     function Window:Set(Val1, Val2)
         if type(Val1) == "string" and type(Val2) == "string" then
             Title.Text = Val1
@@ -6688,11 +6720,34 @@ local ImageLabel = Create("ImageLabel", FrameHolder, {
 Make("Corner", ImageLabel, UDim.new(0, 6))
 
 -- ⚠️ Aplica a imagem aceitando ID OU link HTTP
+-- Dentro de AddDiscordInvite, SUBSTITUA o trecho:
 if Logo and Logo ~= "" then
     task.spawn(function()
-        -- nome único por AddDiscordInvite (usa contador pra não colidir se tiver vários)
-        local uniqueId = "DiscordInvite_" .. tostring(math.random(100000, 999999))
-        ProcessAndApplyImage(ImageLabel, Logo, uniqueId)
+        -- Busca o asset direto sem passar pelo sistema de imagens principal
+        local requestFn = request or http_request or (syn and syn.request)
+        local getAssetFn = getcustomasset or getsynasset
+
+        if Logo:find("https://") or Logo:find("http://") then
+            if requestFn and getAssetFn then
+                local uniqueId = "DiscordInvite_" .. tostring(math.random(100000, 999999))
+                local fileName = IMAGES_FOLDER .. "/" .. uniqueId .. ".png"
+                local ok, resp = pcall(requestFn, {
+                    Url = Logo,
+                    Method = "GET",
+                    Headers = {["User-Agent"] = "Mozilla/5.0"}
+                })
+                if ok and resp and resp.Body then
+                    pcall(writefile, fileName, resp.Body)
+                    ImageLabel.Image = getAssetFn(fileName)
+                end
+            end
+        else
+            local formatted = Logo
+            if not Logo:find("rbxassetid://") and not Logo:find("rbxasset://") then
+                formatted = "rbxassetid://" .. Logo
+            end
+            ImageLabel.Image = formatted
+        end
     end)
 end
 
