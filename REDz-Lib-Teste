@@ -1087,6 +1087,7 @@ function MyLibrary:SetTheme(NewTheme)
 
     SaveImageSettings(CurrentImageSettings)
 end)
+end
 
 function MyLibrary:SetScale(NewScale)
     NewScale = ViewportSize.Y / math.clamp(NewScale, 300, 2000)
