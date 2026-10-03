@@ -23,9 +23,9 @@ local MyLibrary = {
             ["Color Dark Text"] = Color3.fromRGB(0, 255, 109),
 
             -- ⬇️ IMAGENS PADRÃO DO TEMA
-            ["HubImage"]      = "https://cdn.discordapp.com/attachments/.../hub.png",
-            ["MinimizeImage"] = "https://cdn.discordapp.com/attachments/.../min.png",
-            ["TopbarImage"]   = "https://cdn.discordapp.com/attachments/.../top.png",
+            ["HubImage"]      = "https://cdn.discordapp.com/attachments/1548142290323640411/1549935068917661796/file_000000001d70820e9b5e7b24883b432b.png?ex=6ac241c4&is=6ac0f044&hm=9963441f1e367460ba23dd4e07f76a273a23ed62d82bcb7ea98cb1ef8ac7fa1e&",
+            ["MinimizeImage"] = "https://cdn.discordapp.com/attachments/1548142290323640411/1551719479921348659/file_00000000d864820ea7af9197cb2581ba.png?ex=6ac22821&is=6ac0d6a1&hm=a5b4aa85a014245aed3e39c9b7893361c2288bf14287355012832edd91a8ebe0&",
+            ["TopbarImage"]   = "https://cdn.discordapp.com/attachments/1548142290323640411/1549938098371297450/file_0000000064cc820e9c9e1c5fa32089df.png?ex=6ac19bd7&is=6ac04a57&hm=60c69eecbbe6d296fc80e801bf1d26426f879adc91211d2f966fd63a822a2a36&",
         },
 },
     Info = {
